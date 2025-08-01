@@ -103,7 +103,7 @@ internal sealed class Formatter : CSharpSyntaxVisitor
                         : usingDirective.Alias != null
                             ? $"using {usingDirective.Alias.Name.Identifier.ValueText} = {usingDirective.Name?.ToString()};"
                             : $"using {usingDirective.Name?.ToString()};";
-                    
+
                     _sb.AppendLine(normalizedUsing);
                 }
             }
@@ -132,11 +132,11 @@ internal sealed class Formatter : CSharpSyntaxVisitor
     {
         var modifiers = SortModifiers(node.Modifiers);
         var className = node.Identifier.Text;
-        
+
         var declaration = string.IsNullOrEmpty(modifiers)
             ? $"class {className}"
             : $"{modifiers} class {className}";
-            
+
         _sb.AppendLine(declaration);
         _sb.AppendLine("{");
         _sb.Indent();
@@ -149,11 +149,11 @@ internal sealed class Formatter : CSharpSyntaxVisitor
     {
         var modifiers = SortModifiers(node.Modifiers);
         var structName = node.Identifier.Text;
-        
+
         var declaration = string.IsNullOrEmpty(modifiers)
             ? $"struct {structName}"
             : $"{modifiers} struct {structName}";
-            
+
         _sb.AppendLine(declaration);
         _sb.AppendLine("{");
         _sb.Indent();
@@ -166,11 +166,11 @@ internal sealed class Formatter : CSharpSyntaxVisitor
     {
         var modifiers = SortModifiers(node.Modifiers);
         var declaration = node.Declaration.NormalizeWhitespace().ToString(); // Use NormalizeWhitespace() for better normalization
-        
+
         var fieldDeclaration = string.IsNullOrEmpty(modifiers)
             ? $"{declaration};"
             : $"{modifiers} {declaration};";
-            
+
         _sb.AppendLine(fieldDeclaration);
     }
 
@@ -179,11 +179,11 @@ internal sealed class Formatter : CSharpSyntaxVisitor
         var modifiers = SortModifiers(node.Modifiers);
         var constructorName = node.Identifier.Text;
         var parameters = node.ParameterList.NormalizeWhitespace().ToString(); // Use NormalizeWhitespace() for better normalization
-        
+
         var signature = string.IsNullOrEmpty(modifiers)
             ? $"{constructorName}{parameters}"
             : $"{modifiers} {constructorName}{parameters}";
-            
+
         _sb.AppendLine(signature);
         _sb.AppendLine("{");
         _sb.Indent();
@@ -205,11 +205,11 @@ internal sealed class Formatter : CSharpSyntaxVisitor
         var returnType = node.ReturnType.NormalizeWhitespace().ToString(); // Use NormalizeWhitespace() for better normalization
         var methodName = node.Identifier.Text;
         var parameters = node.ParameterList.NormalizeWhitespace().ToString(); // Use NormalizeWhitespace() for better normalization
-        
-        var signature = string.IsNullOrEmpty(modifiers) 
+
+        var signature = string.IsNullOrEmpty(modifiers)
             ? $"{returnType} {methodName}{parameters}"
             : $"{modifiers} {returnType} {methodName}{parameters}";
-            
+
         _sb.AppendLine(signature);
         _sb.AppendLine("{");
         _sb.Indent();
@@ -269,7 +269,7 @@ internal sealed class Formatter : CSharpSyntaxVisitor
         var unknownModifiers = modifiers
             .Where(m => !modifierOrder.ContainsKey(m.Kind()))
             .Select(m => m.ValueText);
-        
+
         sortedModifiers.AddRange(unknownModifiers);
 
         return string.Join(" ", sortedModifiers);
@@ -279,7 +279,7 @@ internal sealed class Formatter : CSharpSyntaxVisitor
     {
         bool first = true;
         MemberDeclarationSyntax? previousMember = null;
-        
+
         foreach (var member in members)
         {
             if (!first)
@@ -300,13 +300,13 @@ internal sealed class Formatter : CSharpSyntaxVisitor
     private static bool ShouldAddBlankLineBetweenMembers(MemberDeclarationSyntax? previous, MemberDeclarationSyntax current)
     {
         if (previous == null) return false;
-        
+
         // Don't add blank line between consecutive field declarations
         if (previous is FieldDeclarationSyntax && current is FieldDeclarationSyntax)
         {
             return false;
         }
-        
+
         // Add blank line between different types of members
         return true;
     }
