@@ -97,7 +97,14 @@ internal sealed class Formatter : CSharpSyntaxVisitor
             {
                 foreach (var usingDirective in usings)
                 {
-                    _sb.AppendLine(usingDirective.ToFullString().TrimEnd());
+                    // Normalize the using directive by reconstructing it
+                    var normalizedUsing = usingDirective.StaticKeyword.IsKind(SyntaxKind.StaticKeyword)
+                        ? $"using static {usingDirective.Name?.ToString()};"
+                        : usingDirective.Alias != null
+                            ? $"using {usingDirective.Alias.Name.Identifier.ValueText} = {usingDirective.Name?.ToString()};"
+                            : $"using {usingDirective.Name?.ToString()};";
+                    
+                    _sb.AppendLine(normalizedUsing);
                 }
             }
 
@@ -123,7 +130,7 @@ internal sealed class Formatter : CSharpSyntaxVisitor
 
     public override void VisitClassDeclaration(ClassDeclarationSyntax node)
     {
-        var modifiers = node.Modifiers.ToFullString().Trim();
+        var modifiers = SortModifiers(node.Modifiers);
         var className = node.Identifier.Text;
         
         var declaration = string.IsNullOrEmpty(modifiers)
@@ -140,7 +147,7 @@ internal sealed class Formatter : CSharpSyntaxVisitor
 
     public override void VisitStructDeclaration(StructDeclarationSyntax node)
     {
-        var modifiers = node.Modifiers.ToFullString().Trim();
+        var modifiers = SortModifiers(node.Modifiers);
         var structName = node.Identifier.Text;
         
         var declaration = string.IsNullOrEmpty(modifiers)
@@ -157,8 +164,8 @@ internal sealed class Formatter : CSharpSyntaxVisitor
 
     public override void VisitFieldDeclaration(FieldDeclarationSyntax node)
     {
-        var modifiers = node.Modifiers.ToFullString().Trim();
-        var declaration = node.Declaration.ToFullString().Trim();
+        var modifiers = SortModifiers(node.Modifiers);
+        var declaration = node.Declaration.NormalizeWhitespace().ToString(); // Use NormalizeWhitespace() for better normalization
         
         var fieldDeclaration = string.IsNullOrEmpty(modifiers)
             ? $"{declaration};"
@@ -169,9 +176,9 @@ internal sealed class Formatter : CSharpSyntaxVisitor
 
     public override void VisitConstructorDeclaration(ConstructorDeclarationSyntax node)
     {
-        var modifiers = node.Modifiers.ToFullString().Trim();
+        var modifiers = SortModifiers(node.Modifiers);
         var constructorName = node.Identifier.Text;
-        var parameters = node.ParameterList.ToFullString().Trim();
+        var parameters = node.ParameterList.NormalizeWhitespace().ToString(); // Use NormalizeWhitespace() for better normalization
         
         var signature = string.IsNullOrEmpty(modifiers)
             ? $"{constructorName}{parameters}"
@@ -184,7 +191,7 @@ internal sealed class Formatter : CSharpSyntaxVisitor
         {
             foreach (var statement in node.Body.Statements)
             {
-                _sb.AppendLine(statement.ToFullString().Trim());
+                _sb.AppendLine(NormalizeStatement(statement));
             }
         }
         _sb.Dedent();
@@ -194,10 +201,10 @@ internal sealed class Formatter : CSharpSyntaxVisitor
     public override void VisitMethodDeclaration(MethodDeclarationSyntax node)
     {
         // Build the method signature from its actual syntax
-        var modifiers = node.Modifiers.ToFullString().Trim();
-        var returnType = node.ReturnType.ToFullString().Trim();
+        var modifiers = SortModifiers(node.Modifiers);
+        var returnType = node.ReturnType.NormalizeWhitespace().ToString(); // Use NormalizeWhitespace() for better normalization
         var methodName = node.Identifier.Text;
-        var parameters = node.ParameterList.ToFullString().Trim();
+        var parameters = node.ParameterList.NormalizeWhitespace().ToString(); // Use NormalizeWhitespace() for better normalization
         
         var signature = string.IsNullOrEmpty(modifiers) 
             ? $"{returnType} {methodName}{parameters}"
@@ -210,11 +217,62 @@ internal sealed class Formatter : CSharpSyntaxVisitor
         {
             foreach (var statement in node.Body.Statements)
             {
-                _sb.AppendLine(statement.ToFullString().Trim());
+                _sb.AppendLine(NormalizeStatement(statement));
             }
         }
         _sb.Dedent();
         _sb.AppendLine("}");
+    }
+
+    private static string NormalizeStatement(SyntaxNode statement)
+    {
+        // Use NormalizeWhitespace() to get properly normalized text
+        return statement.NormalizeWhitespace().ToString();
+    }
+
+    private static string SortModifiers(SyntaxTokenList modifiers)
+    {
+        if (modifiers.Count == 0) return string.Empty;
+
+        // Define the order of modifiers according to C# conventions
+        var modifierOrder = new Dictionary<SyntaxKind, int>
+        {
+            // Accessibility modifiers come first
+            { SyntaxKind.PublicKeyword, 1 },
+            { SyntaxKind.ProtectedKeyword, 2 },
+            { SyntaxKind.InternalKeyword, 3 },
+            { SyntaxKind.PrivateKeyword, 4 },
+            // Then static
+            { SyntaxKind.StaticKeyword, 5 },
+            // Then other modifiers
+            { SyntaxKind.AbstractKeyword, 6 },
+            { SyntaxKind.VirtualKeyword, 7 },
+            { SyntaxKind.OverrideKeyword, 8 },
+            { SyntaxKind.SealedKeyword, 9 },
+            { SyntaxKind.ExternKeyword, 10 },
+            { SyntaxKind.PartialKeyword, 11 },
+            { SyntaxKind.AsyncKeyword, 12 },
+            { SyntaxKind.UnsafeKeyword, 13 },
+            // Storage modifiers come last
+            { SyntaxKind.ReadOnlyKeyword, 14 },
+            { SyntaxKind.VolatileKeyword, 15 },
+            { SyntaxKind.ConstKeyword, 16 }
+        };
+
+        var sortedModifiers = modifiers
+            .Where(m => modifierOrder.ContainsKey(m.Kind()))
+            .OrderBy(m => modifierOrder[m.Kind()])
+            .Select(m => m.ValueText)
+            .ToList();
+
+        // Add any modifiers not in our order dictionary at the end
+        var unknownModifiers = modifiers
+            .Where(m => !modifierOrder.ContainsKey(m.Kind()))
+            .Select(m => m.ValueText);
+        
+        sortedModifiers.AddRange(unknownModifiers);
+
+        return string.Join(" ", sortedModifiers);
     }
 
     private void FormatMembers(SyntaxList<MemberDeclarationSyntax> members)
