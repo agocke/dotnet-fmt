@@ -205,4 +205,128 @@ public class FileTests
 
         Assert.Equal(expected, Fmt.Format(src));
     }
+
+    [Fact]
+    public void PreprocessorDirectives()
+    {
+        var src = """
+        using System;
+
+        #if DEBUG
+            namespace TestNamespace { class TestClass {
+        #pragma warning disable CS0169
+                private static readonly string debugField = "debug";
+        #pragma warning restore CS0169
+                public void DebugMethod() { } } }
+        #endif
+        """;
+        var expected = """
+
+        using System;
+
+        #if DEBUG
+        namespace TestNamespace
+        {
+            class TestClass
+            {
+        #pragma warning disable CS0169
+                private static readonly string debugField = "debug";
+        #pragma warning restore CS0169
+
+                public void DebugMethod()
+                {
+                }
+            }
+        }
+        #endif
+
+        """;
+
+        Assert.Equal(expected, Fmt.Format(src));
+    }
+
+    [Fact]
+    public void PreprocessorDirectivesWithRegions()
+    {
+        var src = """
+        using System;
+
+        namespace TestNamespace {
+        #region Public Methods
+            class TestClass { public void Method1() { } public void Method2() { } }
+        #endregion
+        }
+        """;
+        var expected = """
+
+        using System;
+
+        namespace TestNamespace
+        {
+        #region Public Methods
+            class TestClass
+            {
+                public void Method1()
+                {
+                }
+
+                public void Method2()
+                {
+                }
+            }
+        #endregion
+        }
+
+        """;
+
+        Assert.Equal(expected, Fmt.Format(src));
+    }
+
+    [Fact]
+    public void PreprocessorDirectivesMultipleNesting()
+    {
+        var src = """
+        #define DEBUG
+        using System;
+
+        #if DEBUG
+        namespace TestNamespace {
+        #if NET8_0
+            class TestClass {
+        #pragma warning disable CS0414
+                private readonly int unusedField = 42;
+        #pragma warning restore CS0414
+                public void Test() { }
+            }
+        #endif
+        }
+        #endif
+        """;
+        var expected = """
+
+        #define DEBUG
+        using System;
+
+        #if DEBUG
+        namespace TestNamespace
+        {
+        #if NET8_0
+            class TestClass
+            {
+        #pragma warning disable CS0414
+                private readonly int unusedField = 42;
+        #pragma warning restore CS0414
+
+                public void Test()
+                {
+                }
+            }
+        #endif
+        }
+        #endif
+
+        """;
+
+        Assert.Equal(expected, Fmt.Format(src));
+    }
 }

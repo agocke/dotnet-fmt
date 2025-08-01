@@ -73,7 +73,8 @@ internal sealed class Formatter : CSharpSyntaxVisitor
                 {
                     aliasUsings.Add(usingDirective);
                 }
-                else if (usingDirective.Name?.ToString().StartsWith("System.", StringComparison.OrdinalIgnoreCase) == true)
+                else if (usingDirective.Name?.ToString().Equals("System", StringComparison.OrdinalIgnoreCase) == true
+                    || usingDirective.Name?.ToString().StartsWith("System.", StringComparison.OrdinalIgnoreCase) == true)
                 {
                     systemUsings.Add(usingDirective);
                 }
@@ -116,16 +117,47 @@ internal sealed class Formatter : CSharpSyntaxVisitor
 
         _sb.AppendLine();
         FormatMembers(node.Members);
+
+        VisitToken(node.EndOfFileToken);
     }
 
     public override void VisitNamespaceDeclaration(NamespaceDeclarationSyntax node)
     {
-        _sb.AppendLine($"namespace {node.Name.ToString()}");
-        _sb.AppendLine("{");
+        _sb.StartLine();
+        VisitToken(node.NamespaceKeyword);
+        _sb.AppendRaw(" ");
+        Visit(node.Name);
+        VisitToken(node.SemicolonToken);
+        _sb.AppendLine();
+        _sb.StartLine();
+
+        if (!node.OpenBraceToken.IsMissing)
+        {
+            VisitToken(node.OpenBraceToken);
+            _sb.AppendLine();
+        }
+
         _sb.Indent();
         FormatMembers(node.Members);
         _sb.Dedent();
-        _sb.AppendLine("}");
+
+        if (!node.CloseBraceToken.IsMissing)
+        {
+            VisitToken(node.CloseBraceToken);
+            _sb.AppendLine();
+        }
+    }
+
+    public override void VisitQualifiedName(QualifiedNameSyntax node)
+    {
+        Visit(node.Left);
+        VisitToken(node.DotToken);
+        Visit(node.Right);
+    }
+
+    public override void VisitIdentifierName(IdentifierNameSyntax node)
+    {
+        VisitToken(node.Identifier);
     }
 
     public override void VisitClassDeclaration(ClassDeclarationSyntax node)
@@ -222,6 +254,38 @@ internal sealed class Formatter : CSharpSyntaxVisitor
         }
         _sb.Dedent();
         _sb.AppendLine("}");
+    }
+
+    private void VisitToken(SyntaxToken token)
+    {
+        if (token.HasLeadingTrivia)
+        {
+            foreach (var leading in token.LeadingTrivia)
+            {
+                if (leading.IsKind(SyntaxKind.WhitespaceTrivia) ||
+                    leading.IsKind(SyntaxKind.EndOfLineTrivia))
+                {
+                    continue;
+                }
+                if (leading.IsKind(SyntaxKind.DisabledTextTrivia))
+                {
+                    // This is part of a disabled ifdef. If it parses, we can
+                    // format it. Otherwise, leave it alone
+                    var memberOpt = SyntaxFactory.ParseMemberDeclaration(leading.ToString());
+                    if (memberOpt is { } member)
+                    {
+                        Visit(member);
+                        continue;
+                    }
+                }
+                _sb.AppendRaw(leading.ToString());
+            }
+        }
+        _sb.AppendRaw(token.ValueText);
+        if (token.HasTrailingTrivia)
+        {
+            var trailing = token.TrailingTrivia;
+        }
     }
 
     private static string NormalizeStatement(SyntaxNode statement)

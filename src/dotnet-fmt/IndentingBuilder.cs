@@ -17,12 +17,14 @@ internal struct IndentingBuilder
     public void Indent() => _indentLevel++;
     public void Dedent() => _indentLevel--;
 
+    public void AppendRaw(string s)
+    {
+        _sb.Append(s);
+    }
+
     public void Append(string s)
     {
-        for (int i = 0; i < _indentLevel; i++)
-        {
-            _sb.Append("    "); // 4 spaces for indentation
-        }
+        StartLine();
         _sb.Append(s);
     }
 
@@ -40,5 +42,13 @@ internal struct IndentingBuilder
     public override string ToString()
     {
         return _sb.ToString();
+    }
+
+    internal void StartLine()
+    {
+        for (int i = 0; i < _indentLevel; i++)
+        {
+            _sb.Append("    "); // 4 spaces for indentation
+        }
     }
 }
