@@ -15,11 +15,6 @@ public static class Fmt
             return null; // Return null if there are syntax errors
         }
 
-        var sb = new StringBuilder();
-        if (Formatter.Format(tree, sb))
-        {
-            return sb.ToString();
-        }
-        return null; // Return null if formatting fails
+        return Formatter.Format(tree);
     }
 }

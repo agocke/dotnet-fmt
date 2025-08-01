@@ -10,21 +10,19 @@ namespace DotnetFmt;
 
 internal sealed class Formatter : CSharpSyntaxVisitor
 {
-    const string Indent = "    "; // 4 spaces for indentation
+    private IndentingBuilder _sb;
 
-    private readonly StringBuilder _sb;
-    private int _indentLevel;
-
-    private Formatter(StringBuilder sb)
+    private Formatter(IndentingBuilder sb)
     {
         _sb = sb;
     }
 
-    public static bool Format(CSharpSyntaxTree tree, StringBuilder sb)
+    public static string Format(CSharpSyntaxTree tree)
     {
+        var sb = new IndentingBuilder();
         var formatter = new Formatter(sb);
         formatter.Visit(tree.GetRoot());
-        return true;
+        return sb.ToString();
     }
 
     public override void DefaultVisit(SyntaxNode node)
@@ -36,14 +34,14 @@ internal sealed class Formatter : CSharpSyntaxVisitor
     {
         if (node.Externs.Count > 0)
         {
-            AppendLine();
+            _sb.AppendLine();
 
             bool first = true;
             foreach (var @extern in node.Externs)
             {
                 if (!first)
                 {
-                    AppendLine();
+                    _sb.AppendLine();
                 }
                 VisitExternAliasDirective(@extern);
                 first = false;
@@ -52,7 +50,7 @@ internal sealed class Formatter : CSharpSyntaxVisitor
 
         if (node.Usings.Count > 0)
         {
-            AppendLine();
+            _sb.AppendLine();
 
             // Separate usings into four groups:
             // 1. System.*
@@ -109,31 +107,149 @@ internal sealed class Formatter : CSharpSyntaxVisitor
             WriteUsings(aliasUsings);
         }
 
-        AppendLine();
+        _sb.AppendLine();
         FormatMembers(node.Members);
     }
 
     public override void VisitNamespaceDeclaration(NamespaceDeclarationSyntax node)
     {
-        AppendLine($"namespace {node.Name.ToString()}");
-        AppendLine("{");
-        _indentLevel++;
+        _sb.AppendLine($"namespace {node.Name.ToString()}");
+        _sb.AppendLine("{");
+        _sb.Indent();
         FormatMembers(node.Members);
-        _indentLevel--;
-        AppendLine("}");
+        _sb.Dedent();
+        _sb.AppendLine("}");
+    }
+
+    public override void VisitClassDeclaration(ClassDeclarationSyntax node)
+    {
+        var modifiers = node.Modifiers.ToFullString().Trim();
+        var className = node.Identifier.Text;
+        
+        var declaration = string.IsNullOrEmpty(modifiers)
+            ? $"class {className}"
+            : $"{modifiers} class {className}";
+            
+        _sb.AppendLine(declaration);
+        _sb.AppendLine("{");
+        _sb.Indent();
+        FormatMembers(node.Members);
+        _sb.Dedent();
+        _sb.AppendLine("}");
+    }
+
+    public override void VisitStructDeclaration(StructDeclarationSyntax node)
+    {
+        var modifiers = node.Modifiers.ToFullString().Trim();
+        var structName = node.Identifier.Text;
+        
+        var declaration = string.IsNullOrEmpty(modifiers)
+            ? $"struct {structName}"
+            : $"{modifiers} struct {structName}";
+            
+        _sb.AppendLine(declaration);
+        _sb.AppendLine("{");
+        _sb.Indent();
+        FormatMembers(node.Members);
+        _sb.Dedent();
+        _sb.AppendLine("}");
+    }
+
+    public override void VisitFieldDeclaration(FieldDeclarationSyntax node)
+    {
+        var modifiers = node.Modifiers.ToFullString().Trim();
+        var declaration = node.Declaration.ToFullString().Trim();
+        
+        var fieldDeclaration = string.IsNullOrEmpty(modifiers)
+            ? $"{declaration};"
+            : $"{modifiers} {declaration};";
+            
+        _sb.AppendLine(fieldDeclaration);
+    }
+
+    public override void VisitConstructorDeclaration(ConstructorDeclarationSyntax node)
+    {
+        var modifiers = node.Modifiers.ToFullString().Trim();
+        var constructorName = node.Identifier.Text;
+        var parameters = node.ParameterList.ToFullString().Trim();
+        
+        var signature = string.IsNullOrEmpty(modifiers)
+            ? $"{constructorName}{parameters}"
+            : $"{modifiers} {constructorName}{parameters}";
+            
+        _sb.AppendLine(signature);
+        _sb.AppendLine("{");
+        _sb.Indent();
+        if (node.Body != null)
+        {
+            foreach (var statement in node.Body.Statements)
+            {
+                _sb.AppendLine(statement.ToFullString().Trim());
+            }
+        }
+        _sb.Dedent();
+        _sb.AppendLine("}");
+    }
+
+    public override void VisitMethodDeclaration(MethodDeclarationSyntax node)
+    {
+        // Build the method signature from its actual syntax
+        var modifiers = node.Modifiers.ToFullString().Trim();
+        var returnType = node.ReturnType.ToFullString().Trim();
+        var methodName = node.Identifier.Text;
+        var parameters = node.ParameterList.ToFullString().Trim();
+        
+        var signature = string.IsNullOrEmpty(modifiers) 
+            ? $"{returnType} {methodName}{parameters}"
+            : $"{modifiers} {returnType} {methodName}{parameters}";
+            
+        _sb.AppendLine(signature);
+        _sb.AppendLine("{");
+        _sb.Indent();
+        if (node.Body != null)
+        {
+            foreach (var statement in node.Body.Statements)
+            {
+                _sb.AppendLine(statement.ToFullString().Trim());
+            }
+        }
+        _sb.Dedent();
+        _sb.AppendLine("}");
     }
 
     private void FormatMembers(SyntaxList<MemberDeclarationSyntax> members)
     {
         bool first = true;
+        MemberDeclarationSyntax? previousMember = null;
+        
         foreach (var member in members)
         {
             if (!first)
             {
-                AppendLine();
+                // Add blank line between different types of members, but not between consecutive fields
+                bool shouldAddBlankLine = ShouldAddBlankLineBetweenMembers(previousMember, member);
+                if (shouldAddBlankLine)
+                {
+                    _sb.AppendLine();
+                }
             }
             first = false;
+            previousMember = member;
             Visit(member);
         }
+    }
+
+    private static bool ShouldAddBlankLineBetweenMembers(MemberDeclarationSyntax? previous, MemberDeclarationSyntax current)
+    {
+        if (previous == null) return false;
+        
+        // Don't add blank line between consecutive field declarations
+        if (previous is FieldDeclarationSyntax && current is FieldDeclarationSyntax)
+        {
+            return false;
+        }
+        
+        // Add blank line between different types of members
+        return true;
     }
 }

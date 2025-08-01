@@ -1,4 +1,6 @@
 
+using System.Text;
+
 namespace DotnetFmt;
 
 internal struct IndentingBuilder
@@ -6,9 +8,9 @@ internal struct IndentingBuilder
     private readonly StringBuilder _sb;
     private int _indentLevel;
 
-    public IndentingBuilder(StringBuilder sb)
+    public IndentingBuilder()
     {
-        _sb = sb;
+        _sb = new StringBuilder();
         _indentLevel = 0;
     }
 
@@ -21,27 +23,22 @@ internal struct IndentingBuilder
         {
             _sb.Append("    "); // 4 spaces for indentation
         }
-
-    private void Append(string s)
-    {
-        for (int i = 0; i < _indentLevel; i++)
-        {
-            _sb.Append(Indent);
-        }
         _sb.Append(s);
     }
 
-    private void AppendLine()
+    public void AppendLine()
     {
         _sb.AppendLine();
-        for (int i = 0; i < _indentLevel; i++)
-        {
-            _sb.Append(Indent);
-        }
     }
 
-    private void AppendLine(string s)
+    public void AppendLine(string s)
     {
         Append(s);
         _sb.AppendLine();
     }
+
+    public override string ToString()
+    {
+        return _sb.ToString();
+    }
+}
